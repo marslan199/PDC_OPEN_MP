@@ -32,7 +32,7 @@ void quickSort(int arr[], int low, int high) {
         int pi = partition(arr, low, high);
 
         // Use parallel for loop for dynamic scheduling
-        #pragma omp parallel for schedule(static)  // Dynamic scheduling
+        #pragma omp parallel for schedule(dynamic)  // Dynamic scheduling
         for (int i = 0; i < 2; i++) {
             // We have two recursive calls, one for each subarray
             if (i == 0) {
