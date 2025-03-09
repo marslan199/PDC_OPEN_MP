@@ -22,25 +22,22 @@ int partition(int arr[], int low, int high) {
         }
     }
     swap(&arr[i + 1], &arr[high]);
-    return (i + 1);  // Return the pivot index
+    return (i + 1);  // Returns the pivot index
 }
 
-// Parallel Quick Sort function
+// Parallel Quick Sort function using dynamic scheduling and #pragma omp for
 void quickSort(int arr[], int low, int high) {
     if (low < high) {
         // Partition the array and get the pivot index
         int pi = partition(arr, low, high);
 
-        // Parallelize the recursive sorting of left and right subarrays
-        #pragma omp parallel sections  // Begin parallel sections
-        {
-            #pragma omp section  // First section: Sorting the left subarray
-            {
+        // Use parallel for loop for dynamic scheduling
+        #pragma omp parallel for schedule(static)  // Dynamic scheduling
+        for (int i = 0; i < 2; i++) {
+            // We have two recursive calls, one for each subarray
+            if (i == 0) {
                 quickSort(arr, low, pi - 1);  // Left subarray (elements smaller than pivot)
-            }
-
-            #pragma omp section  // Second section: Sorting the right subarray
-            {
+            } else {
                 quickSort(arr, pi + 1, high);  // Right subarray (elements larger than pivot)
             }
         }
@@ -57,13 +54,12 @@ void printArray(int arr[], int size) {
 
 // Function to calculate execution time
 double calculateExecutionTime(clock_t start, clock_t end) {
-    // Return the elapsed time in seconds
-    return ((double)(end - start)) / CLOCKS_PER_SEC;
+    return ((double)(end - start)) / CLOCKS_PER_SEC;  // Return elapsed time in seconds
 }
 
 int main() {
     // Example array to be sorted
-    int arr[] = {64, 34, 25, 12, 22, 11, 90};
+    int arr[] = {64, 34, 25, 12, 22, 11, 90, 12, 34, 66, 88, 77, 44, 33, 55, 65, 7, 6, 89, 99, 12, 22, 24, 54, 6};
     int n = sizeof(arr) / sizeof(arr[0]);
 
     // Set the number of threads (you can adjust this value)

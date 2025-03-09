@@ -1,6 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
-#include <time.h>  // For clock()
+#include <time.h>  // for clock()
 
 // Function to swap two elements
 void swap(int* a, int* b) {
@@ -52,7 +52,7 @@ double calculateExecutionTime(clock_t start, clock_t end) {
 
 int main() {
     // Example array to be sorted
-    int arr[] = {64, 34, 25, 12, 22, 11, 90};
+    int arr[] = {64, 34, 25, 12, 22, 11, 90,12,34,66,88,77,44,33,55,65,7,6,89,99,12,22,24,54,6};
     int n = sizeof(arr) / sizeof(arr[0]);
 
     // Record the start time
