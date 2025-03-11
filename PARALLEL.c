@@ -89,7 +89,7 @@ int main() {
     omp_set_num_threads(omp_get_max_threads()); // Use max available threads
 
     // Parallel for loop with dynamic scheduling for chunked sorting
-    #pragma omp parallel for schedule(dynamic)
+    #pragma omp parallel for schedule(static)
     for (int i = 0; i < SIZE; i += SIZE / 4) { // Split into 4 chunks
         parallelMergeSort(arr, i, i + (SIZE / 4) - 1);
     }
