@@ -1,90 +1,112 @@
 #include <stdio.h>
 #include <stdlib.h>
-#include <omp.h>    // For OpenMP
-#include <time.h>   // For time measurement
+#include <omp.h>
+#include <time.h>
 
-// Function to swap two elements
-void swap(int* a, int* b) {
-    int temp = *a;
-    *a = *b;
-    *b = temp;
-}
+#define SIZE 5000000  // 5 million elements
 
-// Partition function to partition the array around a pivot
-int partition(int arr[], int low, int high) {
-    int pivot = arr[high];  // Choose the last element as pivot
-    int i = (low - 1);  // Index of the smaller element
+// Merge two sorted subarrays into one sorted array
+void merge(int arr[], int left, int mid, int right) {
+    int n1 = mid - left + 1;
+    int n2 = right - mid;
 
-    for (int j = low; j < high; j++) {
-        if (arr[j] <= pivot) {
-            i++;
-            swap(&arr[i], &arr[j]);
-        }
+    int *L = (int *)malloc(n1 * sizeof(int));
+    int *R = (int *)malloc(n2 * sizeof(int));
+
+    for (int i = 0; i < n1; i++)
+        L[i] = arr[left + i];
+    for (int j = 0; j < n2; j++)
+        R[j] = arr[mid + 1 + j];
+
+    int i = 0, j = 0, k = left;
+    while (i < n1 && j < n2) {
+        if (L[i] <= R[j])
+            arr[k++] = L[i++];
+        else
+            arr[k++] = R[j++];
     }
-    swap(&arr[i + 1], &arr[high]);
-    return (i + 1);  // Returns the pivot index
+
+    while (i < n1)
+        arr[k++] = L[i++];
+    while (j < n2)
+        arr[k++] = R[j++];
+
+    free(L);
+    free(R);
 }
 
-// Parallel Quick Sort function using dynamic scheduling and #pragma omp for
-void quickSort(int arr[], int low, int high) {
-    if (low < high) {
-        // Partition the array and get the pivot index
-        int pi = partition(arr, low, high);
+// Sequential merge sort
+void mergeSort(int arr[], int left, int right) {
+    if (left < right) {
+        int mid = left + (right - left) / 2;
 
-        // Use parallel for loop for dynamic scheduling
-        #pragma omp parallel for schedule(dynamic)  // Dynamic scheduling
-        for (int i = 0; i < 2; i++) {
-            // We have two recursive calls, one for each subarray
-            if (i == 0) {
-                quickSort(arr, low, pi - 1);  // Left subarray (elements smaller than pivot)
-            } else {
-                quickSort(arr, pi + 1, high);  // Right subarray (elements larger than pivot)
+        mergeSort(arr, left, mid);
+        mergeSort(arr, mid + 1, right);
+        merge(arr, left, mid, right);
+    }
+}
+
+// Parallel merge sort using OpenMP tasks
+void parallelMergeSort(int arr[], int left, int right) {
+    if (left < right) {
+        int mid = left + (right - left) / 2;
+
+        if ((right - left) > 1000) { // Only parallelize for large subarrays
+            #pragma omp parallel
+            {
+                #pragma omp single nowait
+                {
+                    #pragma omp task
+                    parallelMergeSort(arr, left, mid);
+
+                    #pragma omp task
+                    parallelMergeSort(arr, mid + 1, right);
+                }
             }
+        } else {
+            mergeSort(arr, left, right);
         }
-    }
-}
 
-// Function to print the array
-void printArray(int arr[], int size) {
-    for (int i = 0; i < size; i++) {
-        printf("%d ", arr[i]);
+        merge(arr, left, mid, right);
     }
-    printf("\n");
-}
-
-// Function to calculate execution time
-double calculateExecutionTime(clock_t start, clock_t end) {
-    return ((double)(end - start)) / CLOCKS_PER_SEC;  // Return elapsed time in seconds
 }
 
 int main() {
-    // Example array to be sorted
-    int arr[] = {64, 34, 25, 12, 22, 11, 90, 12, 34, 66, 88, 77, 44, 33, 55, 65, 7, 6, 89, 99, 12, 22, 24, 54, 6};
-    int n = sizeof(arr) / sizeof(arr[0]);
+    int *arr = (int *)malloc(SIZE * sizeof(int));
+    if (!arr) {
+        printf("Memory allocation failed!\n");
+        return 1;
+    }
 
-    // Set the number of threads (you can adjust this value)
-    omp_set_num_threads(4);  // Specify the number of threads to use
+    srand(time(NULL));
+    for (int i = 0; i < SIZE; i++)
+        arr[i] = rand() % 100000; // Fill with random numbers
 
-    // Record the start time
-    clock_t start = clock();
+    printf("Sorting an array of %d elements...\n", SIZE);
 
-    // Print the original array
-    printf("Original array: ");
-    printArray(arr, n);
+    double start = omp_get_wtime();
 
-    // Call the parallel quickSort function
-    quickSort(arr, 0, n - 1);
+    omp_set_num_threads(omp_get_max_threads()); // Use max available threads
 
-    // Record the end time
-    clock_t end = clock();
+    // Parallel for loop with dynamic scheduling for chunked sorting
+    #pragma omp parallel for schedule(dynamic)
+    for (int i = 0; i < SIZE; i += SIZE / 4) { // Split into 4 chunks
+        parallelMergeSort(arr, i, i + (SIZE / 4) - 1);
+    }
 
-    // Print the sorted array
-    printf("Sorted array: ");
-    printArray(arr, n);
+    // Final merge step to combine sorted chunks
+    for (int step = SIZE / 4; step < SIZE; step *= 2) {
+        for (int i = 0; i < SIZE; i += 2 * step) {
+            int mid = i + step - 1;
+            int right = (i + 2 * step - 1 < SIZE) ? i + 2 * step - 1 : SIZE - 1;
+            merge(arr, i, mid, right);
+        }
+    }
 
-    // Calculate and print the execution time
-    double executionTime = calculateExecutionTime(start, end);
-    printf("Execution time: %f seconds\n", executionTime);
+    double end = omp_get_wtime();
 
+    printf("Sorting completed in %f seconds.\n", end - start);
+
+    free(arr);
     return 0;
 }

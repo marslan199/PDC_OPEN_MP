@@ -1,80 +1,71 @@
 #include <stdio.h>
 #include <stdlib.h>
-#include <time.h>  // for clock()
+#include <time.h>
 
-// Function to swap two elements
-void swap(int* a, int* b) {
-    int temp = *a;
-    *a = *b;
-    *b = temp;
-}
+#define SIZE 5000000  // 5 million elements
 
-// Partition function to partition the array around a pivot
-int partition(int arr[], int low, int high) {
-    int pivot = arr[high];  // Choose the last element as pivot
-    int i = (low - 1);  // Index of the smaller element
+// Merge two sorted subarrays into one sorted array
+void merge(int arr[], int left, int mid, int right) {
+    int n1 = mid - left + 1;
+    int n2 = right - mid;
 
-    for (int j = low; j < high; j++) {
-        if (arr[j] <= pivot) {
-            i++;
-            swap(&arr[i], &arr[j]);
-        }
+    int *L = (int *)malloc(n1 * sizeof(int));
+    int *R = (int *)malloc(n2 * sizeof(int));
+
+    for (int i = 0; i < n1; i++)
+        L[i] = arr[left + i];
+    for (int j = 0; j < n2; j++)
+        R[j] = arr[mid + 1 + j];
+
+    int i = 0, j = 0, k = left;
+    while (i < n1 && j < n2) {
+        if (L[i] <= R[j])
+            arr[k++] = L[i++];
+        else
+            arr[k++] = R[j++];
     }
-    swap(&arr[i + 1], &arr[high]);
-    return (i + 1);  // Return the pivot index
+
+    while (i < n1)
+        arr[k++] = L[i++];
+    while (j < n2)
+        arr[k++] = R[j++];
+
+    free(L);
+    free(R);
 }
 
-// Quick Sort function
-void quickSort(int arr[], int low, int high) {
-    if (low < high) {
-        // Partition the array and get the pivot index
-        int pi = partition(arr, low, high);
+// Sequential merge sort
+void mergeSort(int arr[], int left, int right) {
+    if (left < right) {
+        int mid = left + (right - left) / 2;
 
-        // Recursively sort the left and right subarrays
-        quickSort(arr, low, pi - 1);
-        quickSort(arr, pi + 1, high);
+        mergeSort(arr, left, mid);
+        mergeSort(arr, mid + 1, right);
+        merge(arr, left, mid, right);
     }
-}
-
-// Function to print the array
-void printArray(int arr[], int size) {
-    for (int i = 0; i < size; i++) {
-        printf("%d ", arr[i]);
-    }
-    printf("\n");
-}
-
-// Function to calculate execution time
-double calculateExecutionTime(clock_t start, clock_t end) {
-    // Return the elapsed time in seconds
-    return ((double)(end - start)) / CLOCKS_PER_SEC;
 }
 
 int main() {
-    // Example array to be sorted
-    int arr[] = {64, 34, 25, 12, 22, 11, 90,12,34,66,88,77,44,33,55,65,7,6,89,99,12,22,24,54,6};
-    int n = sizeof(arr) / sizeof(arr[0]);
+    int *arr = (int *)malloc(SIZE * sizeof(int));
+    if (!arr) {
+        printf("Memory allocation failed!\n");
+        return 1;
+    }
 
-    // Record the start time
+    srand(time(NULL));
+    for (int i = 0; i < SIZE; i++)
+        arr[i] = rand() % 100000; // Fill with random numbers
+
+    printf("Sorting an array of %d elements...\n", SIZE);
+
     clock_t start = clock();
 
-    // Print the original array
-    printf("Original array: ");
-    printArray(arr, n);
+    mergeSort(arr, 0, SIZE - 1);
 
-    // Call the quickSort function
-    quickSort(arr, 0, n - 1);
-
-    // Record the end time
     clock_t end = clock();
 
-    // Print the sorted array
-    printf("Sorted array: ");
-    printArray(arr, n);
+    printf("Sorting completed in %f seconds.\n", (double)(end - start) / CLOCKS_PER_SEC);
 
-    // Calculate and print the execution time
-    double executionTime = calculateExecutionTime(start, end);
-    printf("Execution time: %f seconds\n", executionTime);
-
+    free(arr);
     return 0;
 }
