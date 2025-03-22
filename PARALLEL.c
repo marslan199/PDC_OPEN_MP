@@ -4,83 +4,83 @@
 #include <time.h>
 
 #define SIZE 5000000  // 5 million elements
+#define CHUNK_SIZE 500000  // 500,000 elements per chunk
 
 // Merge two sorted subarrays into one sorted array
-void merge(int arr[], int left, int mid, int right) {
-    int n1 = mid - left + 1;
-    int n2 = right - mid;
+void merge(int arr[], int temp[], int left, int mid, int right) {
+    int i = left;       // Starting index for left subarray
+    int j = mid + 1;    // Starting index for right subarray
+    int k = left;       // Starting index for temporary array
 
-    int *L = (int *)malloc(n1 * sizeof(int));
-    int *R = (int *)malloc(n2 * sizeof(int));
-
-    for (int i = 0; i < n1; i++)
-        L[i] = arr[left + i];
-    for (int j = 0; j < n2; j++)
-        R[j] = arr[mid + 1 + j];
-
-    int i = 0, j = 0, k = left;
-    while (i < n1 && j < n2) {
-        if (L[i] <= R[j])
-            arr[k++] = L[i++];
+    // Merge the two subarrays into the temporary array
+    while (i <= mid && j <= right) {
+        if (arr[i] <= arr[j])
+            temp[k++] = arr[i++];
         else
-            arr[k++] = R[j++];
+            temp[k++] = arr[j++];
     }
 
-    while (i < n1)
-        arr[k++] = L[i++];
-    while (j < n2)
-        arr[k++] = R[j++];
+    // Copy remaining elements of the left subarray (if any)
+    while (i <= mid)
+        temp[k++] = arr[i++];
 
-    free(L);
-    free(R);
+    // Copy remaining elements of the right subarray (if any)
+    while (j <= right)
+        temp[k++] = arr[j++];
+
+    // Copy the merged elements back into the original array
+    for (i = left; i <= right; i++)
+        arr[i] = temp[i];
 }
 
 // Sequential merge sort
-void mergeSort(int arr[], int left, int right) {
+void mergeSort(int arr[], int temp[], int left, int right) {
     if (left < right) {
         int mid = left + (right - left) / 2;
 
-        mergeSort(arr, left, mid);
-        mergeSort(arr, mid + 1, right);
-        merge(arr, left, mid, right);
+        mergeSort(arr, temp, left, mid);
+        mergeSort(arr, temp, mid + 1, right);
+        merge(arr, temp, left, mid, right);
     }
 }
 
 // Parallel merge sort using OpenMP tasks
-void parallelMergeSort(int arr[], int left, int right) {
+void parallelMergeSort(int arr[], int temp[], int left, int right) {
     if (left < right) {
         int mid = left + (right - left) / 2;
 
         if ((right - left) > 1000) { // Only parallelize for large subarrays
-            #pragma omp parallel
-            {
-                #pragma omp single nowait
-                {
-                    #pragma omp task
-                    parallelMergeSort(arr, left, mid);
+            #pragma omp task
+            parallelMergeSort(arr, temp, left, mid);
 
-                    #pragma omp task
-                    parallelMergeSort(arr, mid + 1, right);
-                }
-            }
+            #pragma omp task
+            parallelMergeSort(arr, temp, mid + 1, right);
+
+            #pragma omp taskwait
         } else {
-            mergeSort(arr, left, right);
+            mergeSort(arr, temp, left, right);
         }
 
-        merge(arr, left, mid, right);
+        merge(arr, temp, left, mid, right);
     }
 }
 
 int main() {
     int *arr = (int *)malloc(SIZE * sizeof(int));
-    if (!arr) {
-        printf("Memory allocation failed!\n");
+    int *temp = (int *)malloc(SIZE * sizeof(int)); // Temporary array for merging
+
+    if (!arr || !temp) {
+        printf("Memory allocation failed in main!\n");
         return 1;
     }
 
+    // Initialize the array with random numbers
+    double init_start = omp_get_wtime();
     srand(time(NULL));
     for (int i = 0; i < SIZE; i++)
         arr[i] = rand() % 100000; // Fill with random numbers
+    double init_end = omp_get_wtime();
+    printf("Array initialization completed in %f seconds.\n", init_end - init_start);
 
     printf("Sorting an array of %d elements...\n", SIZE);
 
@@ -88,25 +88,48 @@ int main() {
 
     omp_set_num_threads(omp_get_max_threads()); // Use max available threads
 
-    // Parallel for loop with dynamic scheduling for chunked sorting
-    #pragma omp parallel for schedule(static)
-    for (int i = 0; i < SIZE; i += SIZE / 4) { // Split into 4 chunks
-        parallelMergeSort(arr, i, i + (SIZE / 4) - 1);
+    // Calculate the number of chunks
+    int num_chunks = SIZE / CHUNK_SIZE;
+    if (SIZE % CHUNK_SIZE != 0) {
+        num_chunks++;
     }
 
+    // Parallel sorting of chunks
+    double parallel_start = omp_get_wtime();
+    #pragma omp parallel
+    {
+        #pragma omp single
+        {
+            for (int i = 0; i < num_chunks; i++) {
+                int left = i * CHUNK_SIZE;
+                int right = (left + CHUNK_SIZE - 1 < SIZE) ? left + CHUNK_SIZE - 1 : SIZE - 1;
+                printf("Chunk %d: left = %d, right = %d\n", i, left, right); // Debug print
+                #pragma omp task
+                parallelMergeSort(arr, temp, left, right);
+            }
+        }
+    }
+    double parallel_end = omp_get_wtime();
+    printf("Parallel sorting of chunks completed in %f seconds.\n", parallel_end - parallel_start);
+
     // Final merge step to combine sorted chunks
-    for (int step = SIZE / 4; step < SIZE; step *= 2) {
+    double final_merge_start = omp_get_wtime();
+    for (int step = CHUNK_SIZE; step < SIZE; step *= 2) {
         for (int i = 0; i < SIZE; i += 2 * step) {
             int mid = i + step - 1;
             int right = (i + 2 * step - 1 < SIZE) ? i + 2 * step - 1 : SIZE - 1;
-            merge(arr, i, mid, right);
+            printf("Final merge: i = %d, mid = %d, right = %d\n", i, mid, right); // Debug print
+            merge(arr, temp, i, mid, right);
         }
     }
+    double final_merge_end = omp_get_wtime();
+    printf("Final merge step completed in %f seconds.\n", final_merge_end - final_merge_start);
 
     double end = omp_get_wtime();
 
-    printf("Sorting completed in %f seconds.\n", end - start);
+    printf("Total sorting completed in %f seconds.\n", end - start);
 
     free(arr);
+    free(temp);
     return 0;
 }
